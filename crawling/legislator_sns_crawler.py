@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
-import pymysql
+from secretModule import dbconfig
 
 allLegislator = []
 finalData = []
@@ -41,7 +41,7 @@ for item in finalData:
 
 
 # MySQL Connection 연결
-conn = pymysql.connect(host='', user='', password='', db='', charset='')
+conn = dbconfig.dbConnect()
 
 # Connection 으로부터 Cursor 생성
 curs = conn.cursor()
