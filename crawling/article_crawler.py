@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import datetime
 from secretModule import dbconfig
 from collections import namedtuple
+import sys
 
 
 # soup 만들어내는 함수
@@ -24,21 +25,23 @@ def get_crawling_data():
         detailUrl = str("https://news.naver.com" + article.a.get('href'))
         office = article.find('div', {"class": "ranking_office"}).text
         ranking = i
-        img_src = article.img.get('src') if not (article.img is None) else ''
+        thumbImg = article.img.get('src') if not (article.img is None) else ''
 
         # 기사 상세보기 들어가서 찾는 정보
         articleDetailSoup = get_soup(detailUrl)
         realArticleUrl = articleDetailSoup.find("div", {"class": "sponsor"}).a.get('href')
 
         articleDetailBody = articleDetailSoup.find('div', {"id": "articleBodyContents"})
-        # TODO 디비에 넣기
-        print articleDetailBody.text
+        text_ = articleDetailBody.text.encode('utf-8').replace("// flash 오류를 우회하기 위한 함수 추가\nfunction _flash_removeCallback() {}", "").strip()
+        articleContent = text_ if len(unicode(text_)) < 150 else unicode(text_)[0:150]
 
-        fields = 'title link img_src office registe_date update_date ranking'
+        articleDetailBodyImg = articleDetailBody.find('span', {"class": "end_photo_org"})
+        mainImg = articleDetailBodyImg.img.get('src') if not (articleDetailBodyImg is None) else ''
+
+        fields = 'title office content link thumb_img main_img ranking'
         crawlingTuple = namedtuple('crawlingTuple', fields)
         crawling_data.append(
-            crawlingTuple(title, realArticleUrl, img_src, office, datetime.datetime.now(), datetime.datetime.now(),
-                          ranking))
+            crawlingTuple(title, office, articleContent, realArticleUrl, thumbImg, mainImg, ranking))
     return crawling_data
 
 
@@ -64,6 +67,9 @@ def get_intersection_id(x):
         return {x.link: x.id}
 
 
+reload(sys)
+sys.setdefaultencoding('utf8')
+
 conn = dbconfig.dbConnect()
 curs = conn.cursor()
 
@@ -79,13 +85,13 @@ for item in crawlingData:
     if item.link in idLinkDic.keys():
         articleId = idLinkDic[item.link]
         print "update"
-        sql = "UPDATE article SET title = %s, link = %s, img_src = %s, office = %s, ranking = %s, update_date = %s WHERE id = %s"
-        val = (item.title, item.link, item.img_src, item.office, item.ranking, datetime.datetime.now(), articleId)
+        sql = "UPDATE article SET title = %s, office = %s, article_content = %s, link = %s, thumb_img = %s, main_img = %s, ranking = %s, update_date = CURRENT_TIMESTAMP WHERE id = %s"
+        val = (item.title, item.office, item.content, item.link, item.thumb_img, item.main_img, item.ranking, articleId)
         curs.execute(sql, val)
         conn.commit()
     else:
         print "insert"
-        sql = "INSERT INTO article (title, link, img_src, office, registe_date, update_date, ranking) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        sql = "INSERT INTO article (title, office, article_content, link, thumb_img, main_img, ranking) VALUES (%s, %s, %s, %s, %s, %s, %s)"
         curs.execute(sql, item)
         conn.commit()
 conn.close()
